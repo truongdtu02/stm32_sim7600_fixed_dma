@@ -1,0 +1,23 @@
+[33mcommit 69e912ffe6ce65c4d46317054673749e4da55337[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: truong.hd154023 <truong.hd154023@sis.hust.edu.vn>
+Date:   Tue May 11 01:14:20 2021 +0700
+
+    noThread uart rt and fixed
+
+[33mcommit 83f09757ba9e71d4afffdafdd2a89f2a9fa2e598[m
+Author: truong.hd154023 <truong.hd154023@sis.hust.edu.vn>
+Date:   Mon May 10 23:20:12 2021 +0700
+
+    noThread for usart rx
+
+[33mcommit 83421a03bf5037f8089475770c12e9041a32852a[m
+Author: truong.hd154023 <truong.hd154023@sis.hust.edu.vn>
+Date:   Mon May 10 21:35:11 2021 +0700
+
+    nn
+
+[33mcommit 084ce6fb5cf3e978234fb4e256b98eff9d52e668[m
+Author: truong.hd154023 <truong.hd154023@sis.hust.edu.vn>
+Date:   Mon May 10 17:16:43 2021 +0700
+
+    new
