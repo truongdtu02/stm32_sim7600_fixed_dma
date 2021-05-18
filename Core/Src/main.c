@@ -25,8 +25,10 @@
 /* USER CODE BEGIN Includes */
 #include "sim7600_uart_dma.h"
 #include "stdio.h"
+#include "vs1003.h"
 extern bool sim7600_error;
 extern bool sim7600_udp_IsOpen;
+extern bool IsPlaying;
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,6 +46,8 @@ extern bool sim7600_udp_IsOpen;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+SPI_HandleTypeDef hspi2;
+DMA_HandleTypeDef hdma_spi2_tx;
 
 osThreadId defaultTaskHandle;
 osThreadId blinkTaskHandle;
@@ -58,9 +62,9 @@ osMessageQId usart_rx_dma_queue_id;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
-static void MX_SPI3_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_SPI2_Init(void);
 void StartDefaultTask(void const * argument);
 void StartTask02(void const * argument);
 
@@ -111,13 +115,14 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_SPI3_Init();
   MX_TIM3_Init();
   MX_USART1_UART_Init();
+  MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
   //osMessageGet(queue_id, millisec)
-  //VS1003_Init();
-  //VS1003_SoftReset();
+  VS1003_Init();
+  VS1003_SoftReset();
+  //VS1003_PlayBeep_DMA();
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -142,13 +147,12 @@ int main(void)
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of blinkTask */
-  osThreadDef(blinkTask, StartTask02, osPriorityNormal, 0, 128);
+  osThreadDef(blinkTask, StartTask02, osPriorityHigh, 0, 128);
   blinkTaskHandle = osThreadCreate(osThread(blinkTask), NULL);
-  //osThreadSuspend(blinkTaskHandle);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
-  osThreadDef(sim7600Error, sim7600ErrorTask, osPriorityNormal, 0, 128);
+  osThreadDef(sim7600Error, sim7600ErrorTask, osPriorityHigh, 0, 128);
   sim7600ErrorHandle = osThreadCreate(osThread(sim7600Error), NULL);
   //osThreadSuspend(sim7600ErrorHandle);
 
@@ -168,6 +172,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  //HAL_Delay(500);
+	  //VS1003_PlayBeep();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -181,8 +187,8 @@ int main(void)
   */
 void SystemClock_Config(void)
 {
-  LL_FLASH_SetLatency(LL_FLASH_LATENCY_4);
-  while(LL_FLASH_GetLatency()!= LL_FLASH_LATENCY_4)
+  LL_FLASH_SetLatency(LL_FLASH_LATENCY_5);
+  while(LL_FLASH_GetLatency()!= LL_FLASH_LATENCY_5)
   {
   }
   LL_PWR_SetRegulVoltageScaling(LL_PWR_REGU_VOLTAGE_SCALE1);
@@ -193,7 +199,7 @@ void SystemClock_Config(void)
   {
 
   }
-  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSE, LL_RCC_PLLM_DIV_4, 144, LL_RCC_PLLP_DIV_2);
+  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSE, LL_RCC_PLLM_DIV_4, 168, LL_RCC_PLLP_DIV_2);
   LL_RCC_PLL_Enable();
 
    /* Wait till PLL is ready */
@@ -211,7 +217,7 @@ void SystemClock_Config(void)
   {
 
   }
-  LL_SetSystemCoreClock(144000000);
+  LL_SetSystemCoreClock(168000000);
 
    /* Update the time base */
   if (HAL_InitTick (TICK_INT_PRIORITY) != HAL_OK)
@@ -221,78 +227,40 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief SPI3 Initialization Function
+  * @brief SPI2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_SPI3_Init(void)
+static void MX_SPI2_Init(void)
 {
 
-  /* USER CODE BEGIN SPI3_Init 0 */
+  /* USER CODE BEGIN SPI2_Init 0 */
 
-  /* USER CODE END SPI3_Init 0 */
+  /* USER CODE END SPI2_Init 0 */
 
-  LL_SPI_InitTypeDef SPI_InitStruct = {0};
+  /* USER CODE BEGIN SPI2_Init 1 */
 
-  LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
+  /* USER CODE END SPI2_Init 1 */
+  /* SPI2 parameter configuration*/
+  hspi2.Instance = SPI2;
+  hspi2.Init.Mode = SPI_MODE_MASTER;
+  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi2.Init.CLKPolarity = SPI_POLARITY_HIGH;
+  hspi2.Init.CLKPhase = SPI_PHASE_2EDGE;
+  hspi2.Init.NSS = SPI_NSS_SOFT;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
+  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi2.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI2_Init 2 */
 
-  /* Peripheral clock enable */
-  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_SPI3);
-
-  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOC);
-  /**SPI3 GPIO Configuration
-  PC10   ------> SPI3_SCK
-  PC11   ------> SPI3_MISO
-  PC12   ------> SPI3_MOSI
-  */
-  GPIO_InitStruct.Pin = LL_GPIO_PIN_10|LL_GPIO_PIN_11|LL_GPIO_PIN_12;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
-  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  GPIO_InitStruct.Alternate = LL_GPIO_AF_6;
-  LL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /* SPI3 DMA Init */
-
-  /* SPI3_TX Init */
-  LL_DMA_SetChannelSelection(DMA1, LL_DMA_STREAM_5, LL_DMA_CHANNEL_0);
-
-  LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_STREAM_5, LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
-
-  LL_DMA_SetStreamPriorityLevel(DMA1, LL_DMA_STREAM_5, LL_DMA_PRIORITY_LOW);
-
-  LL_DMA_SetMode(DMA1, LL_DMA_STREAM_5, LL_DMA_MODE_NORMAL);
-
-  LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_STREAM_5, LL_DMA_PERIPH_NOINCREMENT);
-
-  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_STREAM_5, LL_DMA_MEMORY_INCREMENT);
-
-  LL_DMA_SetPeriphSize(DMA1, LL_DMA_STREAM_5, LL_DMA_PDATAALIGN_BYTE);
-
-  LL_DMA_SetMemorySize(DMA1, LL_DMA_STREAM_5, LL_DMA_MDATAALIGN_BYTE);
-
-  LL_DMA_DisableFifoMode(DMA1, LL_DMA_STREAM_5);
-
-  /* USER CODE BEGIN SPI3_Init 1 */
-
-  /* USER CODE END SPI3_Init 1 */
-  /* SPI3 parameter configuration*/
-  SPI_InitStruct.TransferDirection = LL_SPI_FULL_DUPLEX;
-  SPI_InitStruct.Mode = LL_SPI_MODE_MASTER;
-  SPI_InitStruct.DataWidth = LL_SPI_DATAWIDTH_8BIT;
-  SPI_InitStruct.ClockPolarity = LL_SPI_POLARITY_LOW;
-  SPI_InitStruct.ClockPhase = LL_SPI_PHASE_1EDGE;
-  SPI_InitStruct.NSS = LL_SPI_NSS_SOFT;
-  SPI_InitStruct.BaudRate = LL_SPI_BAUDRATEPRESCALER_DIV2;
-  SPI_InitStruct.BitOrder = LL_SPI_MSB_FIRST;
-  SPI_InitStruct.CRCCalculation = LL_SPI_CRCCALCULATION_DISABLE;
-  SPI_InitStruct.CRCPoly = 10;
-  LL_SPI_Init(SPI3, &SPI_InitStruct);
-  LL_SPI_SetStandard(SPI3, LL_SPI_PROTOCOL_MOTOROLA);
-  /* USER CODE BEGIN SPI3_Init 2 */
-
-  /* USER CODE END SPI3_Init 2 */
+  /* USER CODE END SPI2_Init 2 */
 
 }
 
@@ -393,9 +361,9 @@ static void MX_DMA_Init(void)
   LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_DMA1);
 
   /* DMA interrupt init */
-  /* DMA1_Stream5_IRQn interrupt configuration */
-  NVIC_SetPriority(DMA1_Stream5_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),5, 0));
-  NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  /* DMA1_Stream4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
 
 }
 
@@ -406,16 +374,21 @@ static void MX_DMA_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  LL_EXTI_InitTypeDef EXTI_InitStruct = {0};
   LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
   LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOH);
-  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA);
-  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
   LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOC);
+  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA);
+  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOE);
+  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
 
   /**/
   LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_6|LL_GPIO_PIN_7);
+
+  /**/
+  LL_GPIO_SetOutputPin(GPIOE, LL_GPIO_PIN_7|LL_GPIO_PIN_11|LL_GPIO_PIN_13);
 
   /**/
   LL_GPIO_ResetOutputPin(GPIOB, LL_GPIO_PIN_12);
@@ -429,6 +402,14 @@ static void MX_GPIO_Init(void)
   LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /**/
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_7|LL_GPIO_PIN_11|LL_GPIO_PIN_13;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
+  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+  LL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  /**/
   GPIO_InitStruct.Pin = LL_GPIO_PIN_12;
   GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
   GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
@@ -436,9 +417,41 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
   LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+  /**/
+  LL_SYSCFG_SetEXTISource(LL_SYSCFG_EXTI_PORTE, LL_SYSCFG_EXTI_LINE9);
+
+  /**/
+  EXTI_InitStruct.Line_0_31 = LL_EXTI_LINE_9;
+  EXTI_InitStruct.LineCommand = ENABLE;
+  EXTI_InitStruct.Mode = LL_EXTI_MODE_IT;
+  EXTI_InitStruct.Trigger = LL_EXTI_TRIGGER_RISING_FALLING;
+  LL_EXTI_Init(&EXTI_InitStruct);
+
+  /**/
+  LL_GPIO_SetPinPull(GPIOE, LL_GPIO_PIN_9, LL_GPIO_PULL_NO);
+
+  /**/
+  LL_GPIO_SetPinMode(GPIOE, LL_GPIO_PIN_9, LL_GPIO_MODE_INPUT);
+
+  /* EXTI interrupt init*/
+  NVIC_SetPriority(EXTI9_5_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),5, 0));
+  NVIC_EnableIRQ(EXTI9_5_IRQn);
+
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+  if (hspi == &hspi2)
+  {
+    //VS1003_PlayBeep_DMA();
+	  if(IsPlaying)
+		  //VS1003_PlayBeep_DMA();
+		  playMp3DMA();
+		//VS1003_Play_1frameMute_DMA();
+		//iii++;
+  }
+}
 void TIM8_TRG_COM_TIM14_IRQHandler(void)
 {
 	//IRQ_Tim_LL_GetTick();

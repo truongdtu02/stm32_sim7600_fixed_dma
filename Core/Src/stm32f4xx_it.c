@@ -23,6 +23,7 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "vs1003.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,6 +57,7 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern DMA_HandleTypeDef hdma_spi2_tx;
 extern TIM_HandleTypeDef htim2;
 
 /* USER CODE BEGIN EV */
@@ -161,17 +163,37 @@ void DebugMon_Handler(void)
 /******************************************************************************/
 
 /**
-  * @brief This function handles DMA1 stream5 global interrupt.
+  * @brief This function handles DMA1 stream4 global interrupt.
   */
-void DMA1_Stream5_IRQHandler(void)
+void DMA1_Stream4_IRQHandler(void)
 {
-  /* USER CODE BEGIN DMA1_Stream5_IRQn 0 */
+  /* USER CODE BEGIN DMA1_Stream4_IRQn 0 */
 
-  /* USER CODE END DMA1_Stream5_IRQn 0 */
+  /* USER CODE END DMA1_Stream4_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_spi2_tx);
+  /* USER CODE BEGIN DMA1_Stream4_IRQn 1 */
 
-  /* USER CODE BEGIN DMA1_Stream5_IRQn 1 */
+  /* USER CODE END DMA1_Stream4_IRQn 1 */
+}
 
-  /* USER CODE END DMA1_Stream5_IRQn 1 */
+/**
+  * @brief This function handles EXTI line[9:5] interrupts.
+  */
+void EXTI9_5_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI9_5_IRQn 0 */
+
+  /* USER CODE END EXTI9_5_IRQn 0 */
+  if (LL_EXTI_IsActiveFlag_0_31(LL_EXTI_LINE_9) != RESET)
+  {
+    LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_9);
+    /* USER CODE BEGIN LL_EXTI_LINE_9 */
+    DREQ_VS1003_IRQhandler();
+    /* USER CODE END LL_EXTI_LINE_9 */
+  }
+  /* USER CODE BEGIN EXTI9_5_IRQn 1 */
+
+  /* USER CODE END EXTI9_5_IRQn 1 */
 }
 
 /**

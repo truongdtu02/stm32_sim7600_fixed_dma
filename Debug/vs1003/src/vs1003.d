@@ -25,21 +25,26 @@ vs1003/src/vs1003.o: ../vs1003/src/vs1003.c \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_flash_ramfunc.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h \
+ ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
- ../Core/Inc/main.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_dma.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_rcc.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_bus.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_system.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_exti.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_cortex.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_utils.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_pwr.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_spi.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_tim.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_usart.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_gpio.h
+ ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h \
+ ../Core/Inc/FreeRTOSConfig.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/portmacro.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h
 
 C:/Users/Bom/STM32CubeIDE/workspace_1.6.1/sim7600LL/vs1003/include/vs1003.h:
 
@@ -93,32 +98,42 @@ C:/Users/Bom/STM32CubeIDE/workspace_1.6.1/sim7600LL/vs1003/include/vs1003.h:
 
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h:
 
+../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h:
+
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:
 
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 
-../Core/Inc/main.h:
+../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_dma.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_rcc.h:
+../Core/Inc/FreeRTOSConfig.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_bus.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_system.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_exti.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_cortex.h:
+../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/portmacro.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_utils.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_pwr.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/task.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_spi.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/list.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_tim.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_usart.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/task.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_gpio.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h:
+
+../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h:
+
+../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h:
+
+../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h:
+
+../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h:

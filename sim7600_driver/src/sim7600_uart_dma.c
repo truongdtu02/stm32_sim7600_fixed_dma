@@ -36,7 +36,10 @@ bool sim7600_network_IsOpen = false;
 bool sim7600_tcp_IsOpen = false;
 bool sim7600_udp_IsOpen = false;
 
-bool HaveCall = false;
+bool sim7600_have_call = false;
+
+#define mp3PacketSize 20
+mp3PacketStruct mp3Packet[mp3PacketSize];
 
 //init gpio, uart, dma(no fifo, byte->byte)
 
@@ -95,6 +98,10 @@ void sim7600_gpio_init()
 
 void sim7600_init()
 {
+  //init udp var
+  int i, limit = mp3PacketSize;
+  for(i = 0; i < limit; i++) mp3Packet[i].IsEmpty = true;
+
   sim_buff[sim_buff_size] = '\0'; //initialize last bytes to ensure end of string (with strstr at handle receive data)
 
   //init semaphore to be ensure tx uart (share resource) use properly (place at main.c)
@@ -520,9 +527,9 @@ bool sim7600_get_ipv4()
 //error occur when network or tcp connect is close
 void sim7600_handle_error()
 {
-  if(HaveCall)
+  if(sim7600_have_call)
   {
-    HaveCall = false;
+    sim7600_have_call = false;
 
     //wait to aquire to send, wait until 
     osSemaphoreWait(BinSemsim7600UartTxHandle, semaphoreCallHangUp_wait_ms);
@@ -594,54 +601,6 @@ bool sim7600_send_cmd(const char *cmd, const char *response1, const char *respon
   osSemaphoreRelease(BinSemsim7600UartTxHandle);
 
   return send_cmd_success;
-}
-//restart/reset module
-//1st use pwr pin
-//2nd use rst pin
-
-void sim7600_restart()
-{
-  LL_USART_Disable(USART1);
-  printf("%s", "rst\n");
-  // reset all var status
-  UDPsendStatus = 0;
-  cmdSendStatus = 0;
-  sim7600_open_tcp_connectStatus = 0;
-  sim7600_open_udp_connectStatus = 0;
-  sim7600_open_netStatus = 0;
-  Sim7600BasicConfigSuccess = false;
-  sim7600_error = false;
-  sim7600_network_IsOpen = false;
-  sim7600_tcp_IsOpen = false;
-  sim7600_udp_IsOpen = false;
-  sim7600_send_packetStatus = 0;
-
-
-  if (restartSimstatus < max_num_restart_sim7600) //0-19
-  {
-    //use pwr pin to power off
-    sim7600_powerOFF();
-    restartSimstatus++;
-  }
-  else if (restartSimstatus < (max_num_restart_sim7600 + max_num_reset_sim7600)) // 20-21
-  {
-    sim7600_reset();
-    sim7600_powerOFF();
-    restartSimstatus++;
-  }
-  else // >=22
-  {
-    //delay to wait
-    sim7600_delay_ms(sleep_minutes_sim7600 * 60 * 1000); // sleep_minutes_sim7600 minutes
-    restartSimstatus = 0;
-  }
-
-  //power on again
-  sim7600_powerON();
-  //change baud rate to default
-  sim7600_change_baud(Sim7600BaudDefaul); // in this function usart is enable again
-
-  LL_USART_Enable(USART1);
 }
 
 void sim7600_usart_send_string(const char *str)
@@ -715,7 +674,7 @@ void sim7600_usart_rx_check()
     }
     //old_pos = pos; /* Save current position as old */
     old_pos += sim7600_handle_received_data();
-    if(old_pos > sim_dma_buffer_size_minus_1) old_pos -= sim_dma_buffer_size; // ~ if(old_pos >= sim_dma_buffer_size) old_pos -= sim_dma_buffer_size;
+    if(old_pos > sim_dma_buffer_size_minus_1) old_pos %= sim_dma_buffer_size; // ~ if(old_pos >= sim_dma_buffer_size) old_pos -= sim_dma_buffer_size;
   }
 }
 
@@ -897,42 +856,8 @@ int sim7600_handle_received_data()
     //dont have enough data
     else if(resultTmp == 2) return sim_buff_index;
 
-    // if(posOfSubStr != NULL)
-    // {
-    //   //check whether have \r\n at the end of this response
-    //   posOfSubStr += strlen(netErrorRes);
-    //   if(posOfSubStr < sim_buff + sim_buff_length)
-    //   {
-    //     uint8_t* pointerTo_r_n = strstr(posOfSubStr, "\r\n");
-    //     if(pointerTo_r_n != NULL)
-    //     {
-
-    //       //sim7600 error, handle in a task sim7600 config task
-    //       sim7600_network_IsOpen = false;
-    //       sim7600_udp_IsOpen = false;
-    //       sim7600_tcp_IsOpen = false;
-
-    //       sim7600_error = true;
-
-    //       //change sim_buff_index
-    //       sim_buff_index = pointerTo_r_n - sim_buff + 2; // + 2 for "\r\n"
-    //       continue; //success
-    //     }
-    //     else if(posOfSubStr + max_data_length_of_response_r_n < sim_buff + sim_buff_length) //the worst case
-    //     {
-    //       //data may be error-bit 
-    //       sim_buff_index = posOfSubStr - sim_buff + max_data_length_of_response_r_n;
-    //       continue;
-    //     }
-    //     else
-    //       return sim_buff_index;
-    //   }
-    //   else return sim_buff_index; //don't have enough data
-    // }
-
-
     // //when tcp connect is close +IPCLOSE: 0
-    // const char* tcpErrorRes = "\r\n+IPCLOSE: 0";
+    const char* tcpErrorRes = "\r\n+IPCLOSE: 0";
     // //if(stringContain(sim_buff, tcpErrorRes))
     // if(strncmp(sim_buff, tcpErrorRes, strlen(tcpErrorRes)) == 0)
     // {
@@ -942,9 +867,22 @@ int sim7600_handle_received_data()
     //   sim7600_error = true;
     //   //return;
     // }
+    resultTmp = check_normal_response(tcpErrorRes, &sim_buff_index);
+    if(resultTmp == 3){} //reponse can't find -> do nothing
+    else if(resultTmp == 0) // success find
+    {
+      //sim7600 error, handle in a task sim7600 config task
+      sim7600_tcp_IsOpen = false;
+      sim7600_error = true;
+      continue;
+    }
+    //data maybe bit-error sim_buff_index = posOfSubStr - sim_buff + max_data_length_of_response_r_n;
+    else if(resultTmp == 1) continue;
+    //dont have enough data
+    else if(resultTmp == 2) return sim_buff_index;
 
     // //when udp connect is close +IPCLOSE: 1
-    // const char* udpErrorRes = "\r\n+IPCLOSE: 1";
+    const char* udpErrorRes = "\r\n+IPCLOSE: 1";
     // if(strncmp(sim_buff, udpErrorRes, strlen(udpErrorRes)) == 0)
     // //if(stringContain(sim_buff, udpErrorRes))
     // {
@@ -954,10 +892,23 @@ int sim7600_handle_received_data()
     //   sim7600_error = true;
     //   return;
     // }
+    resultTmp = check_normal_response(udpErrorRes, &sim_buff_index);
+    if(resultTmp == 3){} //reponse can't find -> do nothing
+    else if(resultTmp == 0) // success find
+    {
+      //sim7600 error, handle in a task sim7600 config task
+      sim7600_udp_IsOpen = false;
+      sim7600_error = true;
+      continue;
+    }
+    //data maybe bit-error sim_buff_index = posOfSubStr - sim_buff + max_data_length_of_response_r_n;
+    else if(resultTmp == 1) continue;
+    //dont have enough data
+    else if(resultTmp == 2) return sim_buff_index;
 
     // //+CIPOPEN: 0,2
     // //tcp connect can't open since network is close
-    // const char* netTcpCloseRes = "\r\n+CIPOPEN: 0,2";
+    const char* netTcpCloseRes = "\r\n+CIPOPEN: 0,2";
     // if(strncmp(sim_buff, netTcpCloseRes, strlen(netTcpCloseRes)) == 0)
     // //if(stringContain(sim_buff, netTcpCloseRes))
     // {
@@ -968,10 +919,24 @@ int sim7600_handle_received_data()
     //   sim7600_error = true;
     //   return;
     // }
+    resultTmp = check_normal_response(netTcpCloseRes, &sim_buff_index);
+    if(resultTmp == 3){} //reponse can't find -> do nothing
+    else if(resultTmp == 0) // success find
+    {
+      //sim7600 error, handle in a task sim7600 config task
+      sim7600_network_IsOpen = false;
+      sim7600_tcp_IsOpen = false;
+      sim7600_error = true;
+      continue;
+    }
+    //data maybe bit-error sim_buff_index = posOfSubStr - sim_buff + max_data_length_of_response_r_n;
+    else if(resultTmp == 1) continue;
+    //dont have enough data
+    else if(resultTmp == 2) return sim_buff_index;
 
     // //+CIPOPEN: 1,2
     // //udp connect can't open since network is close
-    // const char* netUdpCloseRes = "\r\n+CIPOPEN: 1,2";
+    const char* netUdpCloseRes = "\r\n+CIPOPEN: 1,2";
     // if(strncmp(sim_buff, netUdpCloseRes, strlen(netUdpCloseRes)) == 0)
     // //if(stringContain(sim_buff, netUdpCloseRes))
     // {
@@ -982,6 +947,20 @@ int sim7600_handle_received_data()
     //   sim7600_error = true;
     //   return;
     // }
+    resultTmp = check_normal_response(netUdpCloseRes, &sim_buff_index);
+    if(resultTmp == 3){} //reponse can't find -> do nothing
+    else if(resultTmp == 0) // success find
+    {
+      //sim7600 error, handle in a task sim7600 config task
+      sim7600_network_IsOpen = false;
+      sim7600_udp_IsOpen = false;
+      sim7600_error = true;
+      continue;
+    }
+    //data maybe bit-error sim_buff_index = posOfSubStr - sim_buff + max_data_length_of_response_r_n;
+    else if(resultTmp == 1) continue;
+    //dont have enough data
+    else if(resultTmp == 2) return sim_buff_index;
 
     // //when receive call, send AT+CHUP to hang up
     // //RING
@@ -989,9 +968,10 @@ int sim7600_handle_received_data()
     // {
     //   memset(sim_buff, 0, sim_buff_length);
     //   //sim7600 error, handle in a task sim7600 config task
-    //   HaveCall = true;
+    //   sim7600_have_call = true;
     //   return;
     // }
+
     break;
   }
   
@@ -1001,19 +981,32 @@ int error_frame = 0;
 int miss_frame = 0;
 int late_frame = 0;
 int old_ID_frame = 0;
+int songID = 0, IDframePlayed = 0;
+bool IsPlaying = false;
 void sim7600_handle_udp_packet(uint8_t* udpPacket, int length)
 {
-  eStatusPlayMp3 = ON;
-  //wait to aquire to update res
-  osSemaphoreWait(BinSemPlayMp3Handle, semaphorePlayMp3_wait_ms);
-
-  packetMP3HeaderStruct *packetMP3Header = (packetMP3HeaderStruct*)udpPacket;
+ packetMP3HeaderStruct *packetMP3Header = (packetMP3HeaderStruct*)udpPacket;
   //check sum to confirm it is head of a packet
   if (packetMP3Header->checkSumHeader == sim7600_check_sum_data(udpPacket + 2, length - 2))
   {
     numOfPacketUDPReceived++;
+
+    //wait to aquire to update res
+    osSemaphoreWait(BinSemPlayMp3Handle, semaphorePlayMp3_wait_ms);
+
+    if (packetMP3Header->songID != songID)
+    {
+      songID = packetMP3Header->songID;
+      //clear status of mp3Packet
+      int i, limit = mp3PacketSize;
+      for (i = 0; i < limit; i++)
+        mp3Packet[i].IsEmpty = true;
+      IDframePlayed = 0;
+      old_ID_frame = 0;
+    }
+
     uint32_t IDtmp = packetMP3Header->IDframe;
-    if(IDtmp > old_ID_frame)
+    if (IDtmp > old_ID_frame)
     {
       miss_frame += IDtmp - old_ID_frame - 1;
       old_ID_frame = IDtmp;
@@ -1022,39 +1015,67 @@ void sim7600_handle_udp_packet(uint8_t* udpPacket, int length)
     {
       late_frame++;
     }
-    // if(packetMP3Header->songID != songID)
-    // {
-    //   songID = packetMP3Header->songID;
-    //   //clear status of mp3Packet
-    //   int i, limit = mp3PacketSize;
-    //   for(i = 0; i < limit; i++) mp3Packet[i].IsEmpty = true;
-    // }   
 
-    // //copy frame
-    // index_mp3_packet = packetMP3Header->IDframe % mp3PacketSize;
-    // uint8_t tmp = *(packetMP3Header->frame);
-    // //if (mp3Packet[index_mp3_packet].IsEmpty == true)
-    // {
-    //   mp3Packet[index_mp3_packet].IsEmpty = false;
-    //   //clear first
-    //   //memset(mp3Packet[index_mp3_packet].frames, 0, mp3PacketFrameSize);
-    //   for(int i = 0; i < mp3PacketFrameSize; i++) mp3Packet[index_mp3_packet].frames[i] = 0;
-    //   mp3Packet[index_mp3_packet].length = length - packetMP3HeaderLength;
-    //   memcpy(mp3Packet[index_mp3_packet].frames, packetMP3Header->frame, length - packetMP3HeaderLength);
-    //   if (!IsPlaying && index_mp3_packet > 10)
-    //   {
-    //     //IsPlaying = true;
-    //     //playMp3DMA();
-    //   }
-    // }
+    //copy frame
+    int index_mp3_packet = packetMP3Header->IDframe % mp3PacketSize;
+    if (mp3Packet[index_mp3_packet].IsEmpty == true)
+    {
+      //clear first
+      int adu_length = length - packetMP3HeaderLength;
+      memset(mp3Packet[index_mp3_packet].frames + adu_length, 0, mp3PacketFrameSize - adu_length);
+      memcpy(mp3Packet[index_mp3_packet].frames, packetMP3Header->frame, adu_length);
+      mp3Packet[index_mp3_packet].IsEmpty = false;
+    }
+    //release semaphore
+    osSemaphoreRelease(BinSemPlayMp3Handle);
+
+    if (!IsPlaying && numOfPacketUDPReceived > 10)
+    {
+      IsPlaying = true;
+      playMp3DMA();
+    }
   }
   else
   {
 	  error_frame++;
   }
+}
 
-  //release semaphore
-  osSemaphoreRelease(BinSemPlayMp3Handle);
+
+int playPacketIndex = 0;
+uint8_t playBuff[mp3PacketFrameSize];
+int miss_adu = 0;
+void playMp3DMA()
+{
+  
+
+  if(mp3Packet[playPacketIndex].IsEmpty == false)
+  {
+    //wait to aquire to update res
+    osSemaphoreWait(BinSemPlayMp3Handle, semaphorePlayMp3_wait_ms);
+
+    memcpy(playBuff, mp3Packet[playPacketIndex].frames, mp3PacketFrameSize);
+    mp3Packet[playPacketIndex].IsEmpty = true;
+    
+    //release semaphore
+    osSemaphoreRelease(BinSemPlayMp3Handle);
+
+    //change bitrate to 144kbps
+    playBuff[2] &= 0x0F;
+    playBuff[2] |= 0xD0; //0b1101 0000
+    //clear backpoint of playbuff
+    playBuff[4] = 0;
+    VS1003_Play_Data_DMA(playBuff, mp3PacketFrameSize);
+  }
+  else
+  {
+    //play mute
+    VS1003_Play_1frameMute_DMA();
+    miss_adu++;
+    //VS1003_PlayBeep_DMA();
+  }
+  playPacketIndex++;
+  playPacketIndex %= mp3PacketSize;
 }
 
 uint16_t sim7600_check_sum_data(uint8_t *ptr, int length)
@@ -1097,91 +1118,7 @@ bool CheckSumCMD(uint8_t* tcpPacket, int length)
 int remainBytesInApacket;
 void sim7600_handle_tcp_packet(uint8_t* tcpPacket, int length)
 {
-  //check is command
-  /*if(length < 50)
-  {
-    if(strncmp(tcpPacket, "cmd", 3) == 0)
-    {
-      //checkSum cmd
-      if(CheckSumCMD(tcpPacket, length))
-      {
-        tcpPacket += 3; //ignore cmd
-        if(strncmp(tcpPacket, "play", 4) == 0)
-        {
-          //play mp3
-          uint32_t* playTimeP = tcpPacket + 4;
-          playTime = *playTimeP;
-          IDframeNeed = 0;
-          mp3packetIndex = 0;
-          if(statusPlay == STOP)
-            statusPlay = PLAY;
-          return;
-        }
-        else if(strncmp(tcpPacket, "stop", 4) == 0)
-        {
-          //stop
-          statusPlay = STOP;
-          return;
-        }
-        else if(strncmp(tcpPacket, "gettime", 7) == 0)
-        {
-          //get time with udp
-          return;
-        }
-      }
-    }
-     
-  }
 
-
-  //handle mp3 packet
-  if (length > packetMP3HeaderLength)
-  {
-    //find header of each packet
-    if (tcpPacket[0] == 1) //maybe is head of mp3 packet
-    {
-      struct packetMP3HeaderStruct *packetMP3Header = (struct packetMP3HeaderStruct*)tcpPacket;
-      //check sum to confirm it is head of a packet
-      if(packetMP3Header->checkSumHeader == sim7600_check_sum_data(tcpPacket, checkSumHeaderLength))
-      {
-        if(packetMP3Header->IDframe < IDframeNeed) return;
-        FrameOffset = packetMP3Header->IDframe;
-        mp3Packet[mp3packetIndex].length = packetMP3Header->totalBytes; //not include header
-        //mp3Packet[mp3packetIndex].numOfFrame = packetMP3Header->numOfFrame;
-
-        //copy frame
-        memcpy(mp3Packet[mp3packetIndex].frames, tcpPacket + packetMP3HeaderLength, length - packetMP3HeaderLength);
-        remainBytesInApacket = mp3Packet[mp3packetIndex].length - (length - packetMP3HeaderLength);
-        if(remainBytesInApacket == 0)
-        {
-          mp3Packet[mp3packetIndex].IsEmpty = false;
-          mp3packetIndex++;
-          mp3packetIndex %= 3;
-          IsHaveHeaderOfApacket = false;
-          return;
-        }
-        //else
-        IsHaveHeaderOfApacket = true;
-        return;
-      }
-    }
-  }
-
-  //handle remain part of a packet
-  if (IsHaveHeaderOfApacket && length <= remainBytesInApacket) //remain part of a packet (confirmed header)
-  {
-    memcpy(mp3Packet[mp3packetIndex].frames + (mp3Packet[mp3packetIndex].length - remainBytesInApacket), tcpPacket, length);
-    remainBytesInApacket -= length;
-    if (remainBytesInApacket == 0)
-    {
-      mp3Packet[mp3packetIndex].IsEmpty = false;
-      mp3packetIndex++;
-      mp3packetIndex %= 3;
-      IsHaveHeaderOfApacket = false;
-      return;
-    }
-    return;
-  }*/
 }
 
 /**
@@ -1214,5 +1151,65 @@ void sim7600_change_baud(uint32_t baudrate)
 {
   LL_USART_Disable(USART1);
   sim7600SetBaudrate(baudrate);
+  LL_USART_Enable(USART1);
+}
+
+
+
+//restart/reset module
+//1st use pwr pin
+//2nd use rst pin
+
+void sim7600_restart()
+{
+  LL_USART_Disable(USART1);
+  printf("%s", "rst\n");
+    //int
+  UDPsendStatus = 0;
+  cmdSendStatus = 0;
+  sim7600_open_tcp_connectStatus = 0;
+  sim7600_open_udp_connectStatus = 0;
+  sim7600_open_netStatus = 0;
+  sim7600_send_packetStatus = 0;
+  old_pos = 0;
+  pos = 0;
+  playPacketIndex = 0;
+
+  //bool
+  Sim7600BasicConfigSuccess = false;
+  sim7600_error = false;
+  sim7600_network_IsOpen = false;
+  sim7600_tcp_IsOpen = false;
+  sim7600_udp_IsOpen = false;
+  sim7600_have_call = false;
+  IsPlaying = false;
+  //init udp var
+  int i, limit = mp3PacketSize;
+  for(i = 0; i < limit; i++) mp3Packet[i].IsEmpty = true;
+
+  if (restartSimstatus < max_num_restart_sim7600) //0-19
+  {
+    //use pwr pin to power off
+    sim7600_powerOFF();
+    restartSimstatus++;
+  }
+  else if (restartSimstatus < (max_num_restart_sim7600 + max_num_reset_sim7600)) // 20-21
+  {
+    sim7600_reset();
+    sim7600_powerOFF();
+    restartSimstatus++;
+  }
+  else // >=22
+  {
+    //delay to wait
+    sim7600_delay_ms(sleep_minutes_sim7600 * 60 * 1000); // sleep_minutes_sim7600 minutes
+    restartSimstatus = 0;
+  }
+
+  //power on again
+  sim7600_powerON();
+  //change baud rate to default
+  sim7600_change_baud(Sim7600BaudDefaul); // in this function usart is enable again
+
   LL_USART_Enable(USART1);
 }

@@ -24,7 +24,7 @@
 #define Sim7600BaudDefaul 115200//115200
 #define Sim7600BaudMain 3000000//3000000 //3 Mbps
 //LL_USART_SetBaudRate (USART_TypeDef * USARTx, uint32_t PeriphClk,uint32_t OverSampling, uint32_t BaudRate)
-#define pclk2Freq 72000000 //72MHz
+#define pclk2Freq 84000000 //84MHz
 //#define sim7600Baudrate(x) UART_BRR_SAMPLING16(HAL_RCC_GetPCLK2Freq(), x)
 #define sim7600SetBaudrate(x) LL_USART_SetBaudRate(USART1, pclk2Freq, LL_USART_OVERSAMPLING_16, x)
 
@@ -117,29 +117,28 @@ void sim7600_handle_error();
 void sim7600_keepAlive_udp();
 bool sim7600_send_packet_ip(int type, uint8_t* data, int data_length);
 void sim7600_handle_udp_packet(uint8_t* udpPacket, int length);
+void playMp3DMA();
 
 //min size of a packet mp3
-#define min_mp3_udp_packet_size 24 + 6// header + 24B (1 frame 8kbps smallest bitrate)
+#define min_mp3_udp_packet_size 24 + 10// header + 24B (1 frame 8kbps smallest bitrate)
 
-#define packetMP3HeaderLength 6
-#define checkSumHeaderLength 2
+#define packetMP3HeaderLength 10
+#define checkSumHeaderLength 9
 
 typedef struct
 {
     uint16_t checkSumHeader; //encoded (reserved)
-    uint32_t IDframe; //ID of start frame
-    //int32_t songID;
+    int32_t IDframe; //ID of start frame
+    int32_t songID;
 	uint8_t frame[];
 } __attribute__ ((packed)) packetMP3HeaderStruct;
 
-struct mp3PacketStruct
+#define mp3PacketFrameSize 432
+typedef struct
 {
-    uint8_t frames[6500]; //6500 max include 43 frames (48kbps with first adu frame)
-    uint32_t ID;
-    int numOfFrame;
-    int length;
+    uint8_t frames[432]; //1 frame 144kbps
+    int ID;
     bool IsEmpty;
-    int session;
-};
+} mp3PacketStruct;
 
 #endif /* INC_SIM7600_UART_DMA_H_ */
