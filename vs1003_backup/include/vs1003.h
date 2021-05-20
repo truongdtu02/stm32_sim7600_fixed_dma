@@ -25,7 +25,7 @@
 												   
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx_hal.h"
-//#include "cmsis_os.h"
+#include "cmsis_os.h"
 
 /* Private define ------------------------------------------------------------*/
 #define SPI_SPEED_HIGH    1  

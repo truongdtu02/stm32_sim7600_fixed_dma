@@ -37,7 +37,6 @@ sim7600_driver/src/sim7600_uart_dma.o: \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_cortex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_utils.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_pwr.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_usart.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_gpio.h \
  ../Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h \
@@ -57,8 +56,7 @@ sim7600_driver/src/sim7600_uart_dma.o: \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h \
- ../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h \
- C:/Users/Bom/STM32CubeIDE/workspace_1.6.1/sim7600LL/sim7600_driver/include/LL_GetTick.h
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h
 
 C:/Users/Bom/STM32CubeIDE/workspace_1.6.1/sim7600LL/sim7600_driver/include/sim7600_uart_dma.h:
 
@@ -136,8 +134,6 @@ C:/Users/Bom/STM32CubeIDE/workspace_1.6.1/sim7600LL/sim7600_driver/include/sim76
 
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_pwr.h:
 
-../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_tim.h:
-
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_usart.h:
 
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_gpio.h:
@@ -177,5 +173,3 @@ C:/Users/Bom/STM32CubeIDE/workspace_1.6.1/sim7600LL/sim7600_driver/include/sim76
 ../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h:
 
 ../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h:
-
-C:/Users/Bom/STM32CubeIDE/workspace_1.6.1/sim7600LL/sim7600_driver/include/LL_GetTick.h:

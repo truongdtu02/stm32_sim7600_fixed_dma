@@ -22,7 +22,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "vs1003.h"
-SPI_HandleTypeDef* hspiVS1003;
 
 
 /* Private variables ---------------------------------------------------------*/
@@ -53,7 +52,7 @@ static uint8_t VS1003_SPI_ReadByte(void)
 	HAL_StatusTypeDef res;
 	uint8_t rxData[1] = {0, };
 
-	res = HAL_SPI_Receive(hspiVS1003, rxData, sizeof(rxData), HAL_MAX_DELAY);
+	res = HAL_SPI_Receive(&hspi2, rxData, sizeof(rxData), HAL_MAX_DELAY);
 	if (res != HAL_OK);
 		//printf("HAL_SPI_Receive Error\r\n");
 
@@ -68,7 +67,7 @@ static uint8_t VS1003_SPI_WriteByte( uint8_t TxData )
 	uint8_t cmd[1] = {0, };
 
 	cmd[0] = TxData;
-	res = HAL_SPI_Transmit(hspiVS1003, cmd, sizeof(cmd), HAL_MAX_DELAY);
+	res = HAL_SPI_Transmit(&hspi2, cmd, sizeof(cmd), HAL_MAX_DELAY);
 	if (res != HAL_OK);
 		//printf("HAL_SPI_Transmit Error\r\n");
 
@@ -79,7 +78,6 @@ static uint8_t VS1003_SPI_WriteByte( uint8_t TxData )
 *******************************************************************************/ 
 void VS1003_Init(void)
 {		  
-  hspiVS1003 = &hspi2;
   MP3_Reset(0);
   HAL_Delay(100);
   MP3_Reset(1);
@@ -100,8 +98,7 @@ void VS1003_WriteReg( uint8_t reg, uint16_t value )
 	VS1003_SPI_WriteByte(VS_WRITE_COMMAND); /*  VS1003 */
 	VS1003_SPI_WriteByte(reg);             
 	VS1003_SPI_WriteByte(value>>8);        
-	VS1003_SPI_WriteByte(value);	 
-	MP3_DCS(0); 
+	VS1003_SPI_WriteByte(value);	          
 	MP3_CCS(1); 
 	//VS1003_SPI_SetSpeed( SPI_SPEED_HIGH );
 } 
@@ -125,7 +122,6 @@ uint16_t VS1003_ReadReg( uint8_t reg)
 	value = value << 8;
 	value |= VS1003_SPI_ReadByte(); 
 	
-	MP3_DCS(0);     
 	MP3_CCS(1);
 	
 	//VS1003_SPI_SetSpeed( SPI_SPEED_HIGH );
@@ -161,21 +157,124 @@ void VS1003_SoftReset(void)
 	
 	while(  MP3_DREQ ==0 );
 
-    // retry = 0;
+	retry = 0;
 
-	// while( VS1003_ReadReg(SPI_CLOCKF) != 0X9800 )  
-	// {
-	// 	VS1003_WriteReg(SPI_CLOCKF, 0X9800);
-	// 	if( retry++ > 100 )
-	// 	{ 
-	// 		//printf("SPI_CLOCKF Set Error\r\n");
-	// 		break; 
-	// 	}
-	// }
+	while( VS1003_ReadReg(SPI_CLOCKF) != 0X9800 )  
+	{
+		VS1003_WriteReg(SPI_CLOCKF, 0X9800);
+		if( retry++ > 100 )
+		{ 
+			printf("SPI_CLOCKF Set Error\r\n");
+			break; 
+		}
+	}
 
 	VS1003_WriteReg(SPI_VOL, 0x4040);
 	VS1003_ResetDecodeTime();
 } 
+
+/*******************************************************************************
+*******************************************************************************/
+void VS1003_SineTest(void)
+{	
+	VS1003_WriteReg(0x0b,0X2020);	 
+	VS1003_WriteReg(SPI_MODE,0x0820);	    
+	while(  MP3_DREQ ==0 );
+
+	/* vs1003 : 0x53 0xef 0x6e n 0x00 0x00 0x00 0x00 */
+	MP3_CCS(1);
+	MP3_DCS(0);
+	VS1003_SPI_WriteByte(0x53);
+	VS1003_SPI_WriteByte(0xef);
+	VS1003_SPI_WriteByte(0x6e);
+	VS1003_SPI_WriteByte(0x24);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+
+	while(  MP3_DREQ ==0 );  /* DREQ*/
+	MP3_CCS(0);
+	MP3_DCS(1); 
+
+	HAL_Delay(500);
+	
+	/* */
+	MP3_CCS(1);
+	MP3_DCS(0);
+	VS1003_SPI_WriteByte(0x45);
+	VS1003_SPI_WriteByte(0x78);
+	VS1003_SPI_WriteByte(0x69);
+	VS1003_SPI_WriteByte(0x74);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+
+	while(  MP3_DREQ ==0 );  /* DREQ*/
+	MP3_CCS(0);
+	MP3_DCS(1); 
+
+	HAL_Delay(500);	 
+
+	/*  0x44 */
+	MP3_CCS(1);
+	MP3_DCS(0);     
+	VS1003_SPI_WriteByte(0x53);
+	VS1003_SPI_WriteByte(0xef);
+	VS1003_SPI_WriteByte(0x6e);
+	VS1003_SPI_WriteByte(0x44);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+	while(  MP3_DREQ ==0 );  /* DREQ*/
+	MP3_CCS(0);
+	MP3_DCS(1); 
+
+	HAL_Delay(500);
+	
+	/*  */
+	MP3_CCS(1);
+	MP3_DCS(0);      
+	VS1003_SPI_WriteByte(0x45);
+	VS1003_SPI_WriteByte(0x78);
+	VS1003_SPI_WriteByte(0x69);
+	VS1003_SPI_WriteByte(0x74);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+	VS1003_SPI_WriteByte(0x00);
+	while(  MP3_DREQ ==0 );  /* DREQ*/
+	MP3_CCS(0);
+	MP3_DCS(1); 
+
+	HAL_Delay(500); 
+}	 
+
+/*******************************************************************************
+*******************************************************************************/																			 
+void VS1003_RamTest(void)
+{
+     
+   VS1003_Init();
+	
+   VS1003_WriteReg(SPI_MODE,0x0820);
+   while(  MP3_DREQ ==0 );
+	
+   MP3_DCS(0);
+   VS1003_SPI_WriteByte(0x4d);
+   VS1003_SPI_WriteByte(0xea);
+   VS1003_SPI_WriteByte(0x6d);
+   VS1003_SPI_WriteByte(0x54);
+   VS1003_SPI_WriteByte(0x00);
+   VS1003_SPI_WriteByte(0x00);
+   VS1003_SPI_WriteByte(0x00);
+   VS1003_SPI_WriteByte(0x00);
+   HAL_Delay(50);  
+   MP3_DCS(1);
+   //value = VS1003_ReadReg(SPI_HDAT0); /* 0x807F */
+}     
 		 				
 /*******************************************************************************
 *******************************************************************************/   
@@ -303,7 +402,7 @@ void VS1003_PlayBeep_DMA(void)
 {
 	MP3_CCS(1);
     MP3_DCS(0);
-	HAL_SPI_Transmit_DMA(hspiVS1003, szBeepMP3, sizeof(szBeepMP3));
+	HAL_SPI_Transmit_DMA(&hspi2, szBeepMP3, sizeof(szBeepMP3));
 
 }
 
@@ -311,14 +410,14 @@ void VS1003_Play_Data_DMA(uint8_t *data, int length)
 {
 	MP3_CCS(1);
     MP3_DCS(0);
-	HAL_SPI_Transmit_DMA(hspiVS1003, data, length);
+	HAL_SPI_Transmit_DMA(&hspi2, data, length);
 }
 
 void VS1003_Play_1frameMute_DMA()
 {
 	MP3_CCS(1);
     MP3_DCS(0);
-	HAL_SPI_Transmit_DMA(hspiVS1003, mute1framse, 24);
+	HAL_SPI_Transmit_DMA(&hspi2, mute1framse, 24);
 }
 
 void DREQ_VS1003_IRQhandler()
@@ -326,12 +425,12 @@ void DREQ_VS1003_IRQhandler()
 	if (!MP3_DREQ) //falling
 	    {
 	      //pause DMA
-	      HAL_SPI_DMAPause(hspiVS1003);
+	      HAL_SPI_DMAPause(&hspi2);
 	    }
 	    else //rising
 	    {
 	      //resume DMA
-	      HAL_SPI_DMAResume(hspiVS1003);
+	      HAL_SPI_DMAResume(&hspi2);
 	    }
 }
 

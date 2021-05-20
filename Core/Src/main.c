@@ -28,7 +28,6 @@
 #include "vs1003.h"
 extern bool sim7600_error;
 extern bool sim7600_udp_IsOpen;
-extern bool IsPlaying;
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,12 +48,16 @@ extern bool IsPlaying;
 SPI_HandleTypeDef hspi2;
 DMA_HandleTypeDef hdma_spi2_tx;
 
+TIM_HandleTypeDef htim5;
+
 osThreadId defaultTaskHandle;
 osThreadId blinkTaskHandle;
 /* USER CODE BEGIN PV */
 osThreadId sim7600ErrorHandle;
 osThreadId usart_rx_dmaHandle;
+osThreadId startPlayMp3Handle;
 osMessageQId usart_rx_dma_queue_id;
+osMessageQId play_mp3_queue_id;
 
 /* USER CODE END PV */
 
@@ -62,15 +65,16 @@ osMessageQId usart_rx_dma_queue_id;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
-static void MX_TIM3_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_SPI2_Init(void);
+static void MX_TIM5_Init(void);
 void StartDefaultTask(void const * argument);
 void StartTask02(void const * argument);
 
 /* USER CODE BEGIN PFP */
 void sim7600ErrorTask(void const * argument);
 void usart_rx_dmaTask(void const * argument);
+void startPlayMp3Task(void const * argument);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -115,13 +119,26 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_TIM3_Init();
-  MX_USART1_UART_Init();
+  //MX_USART1_UART_Init();
   MX_SPI2_Init();
+  //MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   //osMessageGet(queue_id, millisec)
   VS1003_Init();
   VS1003_SoftReset();
+  //HAL_TIM_Base_Start_IT(&htim5);
+  /*HAL_TIM_Base_Start(&htim5);
+  uint32_t t1, t2, t3, t4;
+  t1 = TIM5->CNT;
+  HAL_Delay(1000);
+  t2 = TIM5->CNT;
+  HAL_TIM_Base_Stop(&htim5);
+  TIM5->CNT = 0;
+  HAL_TIM_Base_Start(&htim5);
+  t3 = TIM5->CNT;
+  HAL_Delay(1000);
+  t4 = TIM5->CNT;
+  HAL_Delay(1000);*/
   //VS1003_PlayBeep_DMA();
   /* USER CODE END 2 */
 
@@ -152,16 +169,24 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
-  osThreadDef(sim7600Error, sim7600ErrorTask, osPriorityHigh, 0, 128);
+  osThreadDef(sim7600Error, sim7600ErrorTask, osPriorityAboveNormal, 0, 128);
   sim7600ErrorHandle = osThreadCreate(osThread(sim7600Error), NULL);
   //osThreadSuspend(sim7600ErrorHandle);
 
   osMessageQDef(rxUASRTQueue, 20, uint8_t);
   usart_rx_dma_queue_id = osMessageCreate(osMessageQ(rxUASRTQueue), NULL);
 
-  osThreadDef(usart_rx_dma, usart_rx_dmaTask, osPriorityHigh, 0, 128);
+  osThreadDef(usart_rx_dma, usart_rx_dmaTask, osPriorityRealtime, 0, 128);
   usart_rx_dmaHandle = osThreadCreate(osThread(usart_rx_dma), NULL);
   //osThreadSuspend(usart_rx_dmaHandle);
+
+  osThreadDef(startPlayMp3, startPlayMp3Task, osPriorityRealtime, 0, 128);
+  startPlayMp3Handle = osThreadCreate(osThread(startPlayMp3), NULL);
+
+  osMessageQDef(playMp3Queue, 2, uint32_t);
+  play_mp3_queue_id = osMessageCreate(osMessageQ(playMp3Queue), NULL);
+
+
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -172,8 +197,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  //HAL_Delay(500);
-	  //VS1003_PlayBeep();
+	 //HAL_Delay(500);
+	 // VS1003_PlayBeep();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -265,37 +290,47 @@ static void MX_SPI2_Init(void)
 }
 
 /**
-  * @brief TIM3 Initialization Function
+  * @brief TIM5 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM3_Init(void)
+static void MX_TIM5_Init(void)
 {
 
-  /* USER CODE BEGIN TIM3_Init 0 */
+  /* USER CODE BEGIN TIM5_Init 0 */
 
-  /* USER CODE END TIM3_Init 0 */
+  /* USER CODE END TIM5_Init 0 */
 
-  LL_TIM_InitTypeDef TIM_InitStruct = {0};
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
 
-  /* Peripheral clock enable */
-  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM3);
+  /* USER CODE BEGIN TIM5_Init 1 */
 
-  /* USER CODE BEGIN TIM3_Init 1 */
+  /* USER CODE END TIM5_Init 1 */
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 41999;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim5.Init.Period = 4294967295;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM5_Init 2 */
 
-  /* USER CODE END TIM3_Init 1 */
-  TIM_InitStruct.Prescaler = 0;
-  TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_UP;
-  TIM_InitStruct.Autoreload = 65535;
-  TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
-  LL_TIM_Init(TIM3, &TIM_InitStruct);
-  LL_TIM_DisableARRPreload(TIM3);
-  LL_TIM_SetClockSource(TIM3, LL_TIM_CLOCKSOURCE_INTERNAL);
-  LL_TIM_SetTriggerOutput(TIM3, LL_TIM_TRGO_RESET);
-  LL_TIM_DisableMasterSlaveMode(TIM3);
-  /* USER CODE BEGIN TIM3_Init 2 */
-
-  /* USER CODE END TIM3_Init 2 */
+  /* USER CODE END TIM5_Init 2 */
 
 }
 
@@ -362,7 +397,7 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Stream4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 15, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
 
 }
@@ -434,28 +469,40 @@ static void MX_GPIO_Init(void)
   LL_GPIO_SetPinMode(GPIOE, LL_GPIO_PIN_9, LL_GPIO_MODE_INPUT);
 
   /* EXTI interrupt init*/
-  NVIC_SetPriority(EXTI9_5_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),5, 0));
+  NVIC_SetPriority(EXTI9_5_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),15, 0));
   NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 }
 
 /* USER CODE BEGIN 4 */
+int numOfDMAInterrupt = 0;
+void DMA2_Stream2_IRQHandler(void) {
+    /* Check half-transfer complete interrupt */
+    if (LL_DMA_IsEnabledIT_HT(DMA2, LL_DMA_STREAM_2) && LL_DMA_IsActiveFlag_HT2(DMA2)) {
+        LL_DMA_ClearFlag_HT2(DMA2);             /* Clear half-transfer complete flag */
+        sim7600_pause_rx_uart_dma(1);
+        osMessagePut(usart_rx_dma_queue_id, 1, 0);
+    }
+
+    /* Check transfer-complete interrupt */
+    if (LL_DMA_IsEnabledIT_TC(DMA2, LL_DMA_STREAM_2) && LL_DMA_IsActiveFlag_TC2(DMA2)) {
+        LL_DMA_ClearFlag_TC2(DMA2);             /* Clear transfer complete flag */
+        sim7600_pause_rx_uart_dma(1);
+        osMessagePut(usart_rx_dma_queue_id, 1, 0);
+    }
+    numOfDMAInterrupt++;
+    /* Implement other events when needed */
+}
+
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi == &hspi2)
   {
     //VS1003_PlayBeep_DMA();
-	  if(IsPlaying)
-		  //VS1003_PlayBeep_DMA();
-		  playMp3DMA();
-		//VS1003_Play_1frameMute_DMA();
-		//iii++;
+    osMessagePut(play_mp3_queue_id, 0, osWaitForever); //play immidiate
   }
 }
-void TIM8_TRG_COM_TIM14_IRQHandler(void)
-{
-	//IRQ_Tim_LL_GetTick();
-}
+
 void USART1_IRQHandler(void)
 {
 	sim7600_usart_IRQHandler();
@@ -465,37 +512,41 @@ void sim7600ErrorTask(void const * argument)
 {
   for(;;)
   {
-    printf("%c", 'e');
+    //printf("%c", 'e');
     osDelay(1000);
     sim7600_handle_error();
     //VS1003_PlayBeep();
-    //LL_GPIO_TogglePin(GPIOA, LL_GPIO_PIN_6);
+    LL_GPIO_TogglePin(GPIOA, LL_GPIO_PIN_7);
   }
 }
 
-osEvent rx_dmaQueueEvent;
 void usart_rx_dmaTask(void const * argument)
 {
   for(;;)
   {
-	  /* Block thread and wait for event to process USART data */
-	  //osMessageQueueGet(usart_rx_dma_queue_id, &d, NULL, osWaitForever);
-	  //osMessageGet(usart_rx_dma_queue_id, osWaitForever); //after 24ms, if don't have
-	  //any data put to queue, sim7600_usart_rx_check... (instruction under) still is implemented
-	  //if(rx_dmaQueueEvent.status == osEventMessage && rx_dmaQueueEvent.value.v == 1)
-		  /* Simply call processing function */
-	  //sim7600_usart_rx_check();
-
-    // if(eStatusPlayMp3 == ON) //because 24ms per frame
+    // if(sim7600_udp_IsOpen)
     // {
-    //   osMessageGet(usart_rx_dma_queue_id, 24); //after 24ms, if don't have
+    //   //osMessageGet(usart_rx_dma_queue_id, 100);
+    // 	osDelay(50);
     // }
-    // else //in normal 
+    // else
     // {
-    //   osMessageGet(usart_rx_dma_queue_id, osWaitForever);
+    //   //osMessageGet(usart_rx_dma_queue_id, 1000);
+    // 	osDelay(50);
     // }
+    //osDelay(100);
     osMessageGet(usart_rx_dma_queue_id, osWaitForever);
     sim7600_usart_rx_check();
+  }
+}
+
+osEvent playMp3QueueEvent;
+void startPlayMp3Task(void const * argument)
+{
+  for(;;)
+  {
+    playMp3QueueEvent = osMessageGet(play_mp3_queue_id, osWaitForever);
+    playMp3DMA(playMp3QueueEvent.value.v);
   }
 }
 /* USER CODE END 4 */
@@ -542,13 +593,14 @@ void StartTask02(void const * argument)
   static int StartTask02_num = 0;
   for(;;)
   {
-	LL_GPIO_TogglePin(GPIOA, LL_GPIO_PIN_7);
+	//LL_GPIO_TogglePin(GPIOA, LL_GPIO_PIN_7);
     osDelay(1000);
 
     if(sim7600_udp_IsOpen)
     {
     	StartTask02_num++;
-    	if(StartTask02_num % 10 == 0 || StartTask02_num < 10) sim7600_keepAlive_udp();
+    	//if(StartTask02_num % 5 == 0 || StartTask02_num < 30) sim7600_keepAlive_udp();
+    	if((StartTask02_num % 5 == 0) || (StartTask02_num < 5)) sim7600_keepAlive_udp();
     }
   }
   /* USER CODE END StartTask02 */
@@ -571,7 +623,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-
+  if(htim->Instance == TIM5)
+  		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
   /* USER CODE END Callback 1 */
 }
 

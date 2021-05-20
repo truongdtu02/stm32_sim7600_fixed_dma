@@ -18,8 +18,10 @@
 #include <string.h>
 #include <stdbool.h>
 #include "cmsis_os.h"
-#include "stdio.h"
-#include "LL_GetTick.h"
+#include <stdio.h>
+
+#define waitFrameBeforePlayNewSong 12
+#define timePerFrame_ms 24
 
 #define Sim7600BaudDefaul 115200//115200
 #define Sim7600BaudMain 3000000//3000000 //3 Mbps
@@ -30,7 +32,11 @@
 
 #define pwrSIM_Pin LL_GPIO_PIN_0
 #define pwrSIM_GPIO_Port GPIOE
-#define rstSIM_Pin LL_GPIO_PIN_1
+
+#define CTS_SIM_Pin LL_GPIO_PIN_1
+#define CTS_SIM_GPIO_Port GPIOE
+
+#define rstSIM_Pin LL_GPIO_PIN_2
 #define rstSIM_GPIO_Port GPIOE
 
 #define semaphoreUART_TXwait_ms 100
@@ -54,6 +60,7 @@ enum {PLAY, STOP, RUNNING} statusPlay;
 
 //#define Sim_RST(x) x ? HAL_GPIO_WritePin(rstSIM_GPIO_Port, rstSIM_Pin, GPIO_PIN_SET) : HAL_GPIO_WritePin(rstSIM_GPIO_Port, rstSIM_Pin, GPIO_PIN_RESET)
 #define Sim_RST(x) x ? LL_GPIO_SetOutputPin(rstSIM_GPIO_Port, rstSIM_Pin) : LL_GPIO_ResetOutputPin(rstSIM_GPIO_Port, rstSIM_Pin)
+#define Sim_CTS(x) x ? LL_GPIO_SetOutputPin(CTS_SIM_GPIO_Port, CTS_SIM_Pin) : LL_GPIO_ResetOutputPin(CTS_SIM_GPIO_Port, CTS_SIM_Pin)
 
 
 //led status TCP connect, turn on when success, off when not
@@ -75,6 +82,54 @@ const char* res1; int res1Length;
 const char* res2; int res2Length;
 uint32_t playTime; //in ms
 int offsetTimer;
+
+extern USART_TypeDef* usartSim7600;
+//int numOfDisableDMA = 0;
+//signal 0: use from IDLE interrupt, 1: use from DMA TC/HT interrutp
+__STATIC_INLINE void sim7600_pause_rx_uart_dma(int signal)
+{
+
+	//disable for soure
+		LL_DMA_DisableStream(DMA2, LL_DMA_STREAM_2);
+		while(LL_DMA_IsEnabledStream(DMA2, LL_DMA_STREAM_2)); //wait until En bit == 0
+
+	//clear IDLE flag to avoid IDLE and HT/TC DMA occur at the same time
+	/*if(signal) // == 1
+	{
+		  if ((usartSim7600->CR1 & USART_CR1_IDLEIE) == USART_CR1_IDLEIE && (usartSim7600->SR & USART_SR_IDLE) == (USART_SR_IDLE))
+		  {
+		    // Clear IDLE line flag
+		    volatile uint32_t tmpreg;
+		    tmpreg = usartSim7600->SR;
+		    (void)tmpreg;
+		    tmpreg = usartSim7600->DR;
+		    (void)tmpreg;
+		  }
+	}
+	LL_USART_DisableDMAReq_RX(USART1);
+	while(LL_USART_IsEnabledDMAReq_RX(USART1));
+	*/
+
+}
+
+extern uint8_t* sim_dma_buffer_pointer; //circle buffer
+
+__STATIC_INLINE void sim7600_resume_rx_uart_dma(uint16_t oldNDTR, int old_pos_address)
+{
+	//disable for soure
+	LL_DMA_DisableStream(DMA2, LL_DMA_STREAM_2);
+	while(LL_DMA_IsEnabledStream(DMA2, LL_DMA_STREAM_2)); //wait until En bit == 0
+
+	//Sim_CTS(0);
+	LL_DMA_SetDataLength(DMA2, LL_DMA_STREAM_2, oldNDTR);
+	LL_DMA_SetMemoryAddress(DMA2, LL_DMA_STREAM_2, (uint32_t)sim_dma_buffer_pointer + old_pos_address);
+
+	LL_DMA_EnableStream(DMA2, LL_DMA_STREAM_2);
+	while(!LL_DMA_IsEnabledStream(DMA2, LL_DMA_STREAM_2)); //wait until En bit == 1
+/*
+	LL_USART_EnableDMAReq_RX(USART1);
+		while(!LL_USART_IsEnabledDMAReq_RX(USART1));*/
+}
 
 __STATIC_INLINE void sim7600_delay_ms(int _ms)
 {
@@ -117,7 +172,7 @@ void sim7600_handle_error();
 void sim7600_keepAlive_udp();
 bool sim7600_send_packet_ip(int type, uint8_t* data, int data_length);
 void sim7600_handle_udp_packet(uint8_t* udpPacket, int length);
-void playMp3DMA();
+void playMp3DMA(int IDframeWillplay);
 
 //min size of a packet mp3
 #define min_mp3_udp_packet_size 24 + 10// header + 24B (1 frame 8kbps smallest bitrate)
@@ -128,9 +183,10 @@ void playMp3DMA();
 typedef struct
 {
     uint16_t checkSumHeader; //encoded (reserved)
-    int32_t IDframe; //ID of start frame
-    int32_t songID;
+    int IDframe; //ID of start frame
+    int songID;
 	uint8_t frame[];
+//} packetMP3HeaderStruct;
 } __attribute__ ((packed)) packetMP3HeaderStruct;
 
 #define mp3PacketFrameSize 432
