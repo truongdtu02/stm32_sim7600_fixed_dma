@@ -20,7 +20,7 @@
 #include "cmsis_os.h"
 #include <stdio.h>
 
-#define waitFrameBeforePlayNewSong 12
+#define waitFrameBeforePlayNewSong 18
 #define timePerFrame_ms 24
 
 #define Sim7600BaudDefaul 115200//115200

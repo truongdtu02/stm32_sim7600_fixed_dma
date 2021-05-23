@@ -44,7 +44,7 @@ extern SPI_HandleTypeDef hspi2;
 
 #define XRST_Pin GPIO_PIN_7
 #define XRST_GPIO_Port GPIOE
-
+;
 /* reset */
 #define MP3_Reset(x) x ? HAL_GPIO_WritePin(XRST_GPIO_Port, XRST_Pin, GPIO_PIN_SET) : HAL_GPIO_WritePin(XRST_GPIO_Port, XRST_Pin, GPIO_PIN_RESET)
 

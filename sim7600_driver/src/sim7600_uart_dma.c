@@ -71,7 +71,7 @@ void sim7600_powerOFF()
   sim7600_delay_ms(4000);
 
   Sim_PWR(1);
-  sim7600_delay_ms(180000); // ~ 3 minutes
+  sim7600_delay_ms(20000); // ~ 3 minutes
 }
 
 void sim7600_reset()
@@ -200,6 +200,9 @@ void sim7600_init()
 
   //wait until USART DMA is ready
   while(!LL_USART_IsEnabled(USART1) || !LL_DMA_IsEnabledStream(DMA2, LL_DMA_STREAM_2));
+
+  //power off to debug (don't need to plug out sim7600)
+  sim7600_powerOFF();
 
   //power on sim7600
   sim7600_powerON();
