@@ -8,6 +8,7 @@
 #include "sim7600_uart_dma.h"
 
 USART_TypeDef* usartSim7600 = USART1;
+extern TIM_HandleTypeDef htim1;
 
 osSemaphoreId BinSemsim7600UartTxHandle;
 osSemaphoreId BinSemPlayMp3Handle;
@@ -44,6 +45,8 @@ bool sim7600_tcp_IsOpen = false;
 bool sim7600_udp_IsOpen = false;
 
 bool sim7600_have_call = false;
+
+bool IsBaudrate3Mbps = false;
 
 #define mp3PacketSize 24
 mp3PacketStruct mp3Packet[mp3PacketSize];
@@ -91,16 +94,27 @@ void sim7600_gpio_init()
   //gpio init
   LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
   LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOE);
+  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA);
 
   //set default state at begin (high or low depend on hardware / circuit)
-  LL_GPIO_SetOutputPin(GPIOE, pwrSIM_Pin | rstSIM_Pin | CTS_SIM_Pin);
+  LL_GPIO_SetOutputPin(GPIOE, pwrSIM_Pin | rstSIM_Pin);
 
-  GPIO_InitStruct.Pin = pwrSIM_Pin | rstSIM_Pin | CTS_SIM_Pin;
+  GPIO_InitStruct.Pin = pwrSIM_Pin | rstSIM_Pin;
   GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
   GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
   GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
   GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
   LL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  //set default state at begin (high or low depend on hardware / circuit)
+  LL_GPIO_ResetOutputPin(CTS_SIM_GPIO_Port, CTS_SIM_Pin);
+
+  GPIO_InitStruct.Pin = CTS_SIM_Pin;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
+  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+  LL_GPIO_Init(CTS_SIM_GPIO_Port, &GPIO_InitStruct);
 }
 
 void sim7600_init()
@@ -180,7 +194,9 @@ void sim7600_init()
   LL_USART_ConfigAsyncMode(USART1);
   LL_USART_EnableDMAReq_RX(USART1);
   LL_USART_EnableIT_IDLE(USART1);
-  LL_USART_EnableRTSHWFlowCtrl(USART1);
+  LL_USART_EnableIT_RXNE(USART1);
+  LL_USART_DisableRTSHWFlowCtrl(USART1);
+  LL_USART_EnableCTSHWFlowCtrl(USART1);
 
   /* USART interrupt */
   //priority high (6) after spi and dma for vs1003
@@ -223,7 +239,7 @@ bool sim7600_config()
   restartSimstatus = 0; //reset
 
   //flow control AT+IFC=0,2 (CTS at sim , and RTS at stm32) at pin pe1
-  if (!sim7600_send_cmd("AT+IFC=0,2\r\n", "OK", "", 500))
+  if (!sim7600_send_cmd("AT+IFC=2,2\r\n", "OK", "", 500))
     return false;
 
   //change to main baudrate
@@ -231,6 +247,7 @@ bool sim7600_config()
   if (!sim7600_send_cmd(sim7600_cmd_buff, "OK", "", 500))
     return false;
   sim7600_change_baud(Sim7600BaudMain);
+  IsBaudrate3Mbps = true;
 
   //check sim
   if (!sim7600_send_cmd("at+ciccid\r\n", "OK", "", 500))
@@ -717,9 +734,14 @@ int pos = 0;
 
 volatile uint16_t ndtr_dma, ndtr_dma2;
 volatile int returnTmp = 0;
+volatile int timeHandle_usart_rx_check_us = 0; //debug
+volatile int timeHandle_usart_rx_check_us_max = 0; //debug
 void sim7600_usart_rx_check()
 {
+	TIM3->CNT = 0; //debug
+
   /* Calculate current position in buffer */
+
   ndtr_dma = LL_DMA_GetDataLength(DMA2, LL_DMA_STREAM_2);
   pos = sim_dma_buffer_size - (int)ndtr_dma;
   // if(pos > (2*sim_dma_buffer_size))
@@ -751,6 +773,7 @@ void sim7600_usart_rx_check()
         sim_buff_length += pos;
       }
     }
+    sim7600_resume_rx_uart_dma();
     //old_pos = pos; /* Save current position as old */
     returnTmp = sim7600_handle_received_data();
     if(returnTmp < 0) //something wrong
@@ -772,7 +795,16 @@ void sim7600_usart_rx_check()
   {
 	  printf("error");
   }*/
-  //sim7600_resume_rx_uart_dma(ndtr_dma, old_pos);
+  if(sim_buff_length > 3000)
+  {
+	  printf("st wrong");
+  }
+
+  sim7600_resume_rx_uart_dma();
+  //debug
+  timeHandle_usart_rx_check_us = TIM3->CNT;
+  //debug
+  timeHandle_usart_rx_check_us_max = timeHandle_usart_rx_check_us > timeHandle_usart_rx_check_us_max ? timeHandle_usart_rx_check_us : timeHandle_usart_rx_check_us_max;
 }
 
 int numOfPacketUDPReceived = 0;
@@ -1313,7 +1345,8 @@ void sim7600_handle_tcp_packet(uint8_t* tcpPacket, int length)
 /**
  * \brief           usartSim7600 global interrupt handler
  */
-int numOfIDLEdetect = 0;
+int numOfIDLEdetect = 0, numOfRXNEdetect = 0;
+bool uartFirstByte = false;
 void sim7600_usart_IRQHandler(void)
 {
   /* Check for IDLE line interrupt */
@@ -1324,6 +1357,8 @@ void sim7600_usart_IRQHandler(void)
 
   if ((usartSim7600->CR1 & USART_CR1_IDLEIE) == USART_CR1_IDLEIE && (usartSim7600->SR & USART_SR_IDLE) == (USART_SR_IDLE))
   {
+	  HAL_TIM_Base_Stop_IT(&htim1);
+
     // Clear IDLE line flag
     volatile uint32_t tmpreg;
     tmpreg = usartSim7600->SR;
@@ -1343,6 +1378,23 @@ void sim7600_usart_IRQHandler(void)
     osMessagePut(usart_rx_dma_queue_id, 1, 0);
 
     numOfIDLEdetect++; //debug
+
+    uartFirstByte = true; // ~ //LL_USART_EnableIT_RXNE(USART1);
+
+    return;
+  }
+
+  //check RXNE interrutp
+  //since DMA clear RXNE so we can't check RXNE flag, uart sim7600 just be configured 2 types of interrupt
+  // are IDLE and RXNE, so if it is IDLE, we will return (in above right after)
+  //and if it is RXNE we just check LL_USART_IsEnabledIT_RXNE
+  if(uartFirstByte && IsBaudrate3Mbps)// && LL_USART_IsActiveFlag_RXNE(USART1))
+  {
+	  uartFirstByte = false; //~ LL_USART_DisableIT_RXNE(USART1);
+	  //LL_USART_ClearFlag_RXNE(USART1); do this by DMA
+	  numOfRXNEdetect++;
+    TIM1->CNT = 0;
+	  HAL_TIM_Base_Start_IT(&htim1);
   }
 }
 

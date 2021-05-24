@@ -33,8 +33,9 @@
 #define pwrSIM_Pin LL_GPIO_PIN_0
 #define pwrSIM_GPIO_Port GPIOE
 
-#define CTS_SIM_Pin LL_GPIO_PIN_1
-#define CTS_SIM_GPIO_Port GPIOE
+//CTS sim <-> RTS uart stm32
+#define CTS_SIM_Pin LL_GPIO_PIN_12
+#define CTS_SIM_GPIO_Port GPIOA
 
 #define rstSIM_Pin LL_GPIO_PIN_2
 #define rstSIM_GPIO_Port GPIOE
@@ -84,51 +85,51 @@ uint32_t playTime; //in ms
 int offsetTimer;
 
 extern USART_TypeDef* usartSim7600;
+
 //int numOfDisableDMA = 0;
 //signal 0: use from IDLE interrupt, 1: use from DMA TC/HT interrutp
-__STATIC_INLINE void sim7600_pause_rx_uart_dma(int signal)
+__STATIC_INLINE void sim7600_pause_rx_uart_dma()
 {
-
-	//disable for soure
-		LL_DMA_DisableStream(DMA2, LL_DMA_STREAM_2);
-		while(LL_DMA_IsEnabledStream(DMA2, LL_DMA_STREAM_2)); //wait until En bit == 0
-
-	//clear IDLE flag to avoid IDLE and HT/TC DMA occur at the same time
-	/*if(signal) // == 1
-	{
-		  if ((usartSim7600->CR1 & USART_CR1_IDLEIE) == USART_CR1_IDLEIE && (usartSim7600->SR & USART_SR_IDLE) == (USART_SR_IDLE))
-		  {
-		    // Clear IDLE line flag
-		    volatile uint32_t tmpreg;
-		    tmpreg = usartSim7600->SR;
-		    (void)tmpreg;
-		    tmpreg = usartSim7600->DR;
-		    (void)tmpreg;
-		  }
-	}
-	LL_USART_DisableDMAReq_RX(USART1);
-	while(LL_USART_IsEnabledDMAReq_RX(USART1));
-	*/
-
+//	//disable for soure
+//		LL_DMA_DisableStream(DMA2, LL_DMA_STREAM_2);
+//		while(LL_DMA_IsEnabledStream(DMA2, LL_DMA_STREAM_2)); //wait until En bit == 0
+	 //LL_USART_DisableDMAReq_RX(USART1);
+	//LL_USART_Disable(USART1);
+	 //LL_USART_DisableDMAReq_RX(USART1); //debug
+	//LL_USART_DisableRTSHWFlowCtrl(USART1);
+	Sim_CTS(1);
 }
 
 extern uint8_t* sim_dma_buffer_pointer; //circle buffer
 
-__STATIC_INLINE void sim7600_resume_rx_uart_dma(uint16_t oldNDTR, int old_pos_address)
+__STATIC_INLINE void sim7600_resume_rx_uart_dma()
 {
-	//disable for soure
-	LL_DMA_DisableStream(DMA2, LL_DMA_STREAM_2);
-	while(LL_DMA_IsEnabledStream(DMA2, LL_DMA_STREAM_2)); //wait until En bit == 0
+//	//check if dma is diable then we will enable again, else do nothing
+//	if(!LL_DMA_IsEnabledStream(DMA2, LL_DMA_STREAM_2))
+//	{
+//			LL_DMA_SetDataLength(DMA2, LL_DMA_STREAM_2, oldNDTR);
+//			LL_DMA_SetMemoryAddress(DMA2, LL_DMA_STREAM_2, (uint32_t)sim_dma_buffer_pointer + old_pos_address);
+//
+//			LL_DMA_EnableStream(DMA2, LL_DMA_STREAM_2);
+//			while(!LL_DMA_IsEnabledStream(DMA2, LL_DMA_STREAM_2)); //wait until En bit == 1
+//	}
+	//LL_USART_EnableDMAReq_RX(USART1);
+	//LL_USART_Enable(USART1);
 
-	//Sim_CTS(0);
-	LL_DMA_SetDataLength(DMA2, LL_DMA_STREAM_2, oldNDTR);
-	LL_DMA_SetMemoryAddress(DMA2, LL_DMA_STREAM_2, (uint32_t)sim_dma_buffer_pointer + old_pos_address);
+	//debug
+//	if((LL_GPIO_ReadOutputPort(CTS_SIM_GPIO_Port) & CTS_SIM_Pin) != 0) //pin is in high state
+//	{
+//		volatile ndtr_tmp = LL_DMA_GetDataLength(DMA2, LL_DMA_STREAM_2);
+//		ndtr_tmp = LL_DMA_GetDataLength(DMA2, LL_DMA_STREAM_2);
+//		ndtr_tmp = LL_DMA_GetDataLength(DMA2, LL_DMA_STREAM_2);
+//		ndtr_tmp = LL_DMA_GetDataLength(DMA2, LL_DMA_STREAM_2);
+//		ndtr_tmp = LL_DMA_GetDataLength(DMA2, LL_DMA_STREAM_2);
+//	}
 
-	LL_DMA_EnableStream(DMA2, LL_DMA_STREAM_2);
-	while(!LL_DMA_IsEnabledStream(DMA2, LL_DMA_STREAM_2)); //wait until En bit == 1
-/*
-	LL_USART_EnableDMAReq_RX(USART1);
-		while(!LL_USART_IsEnabledDMAReq_RX(USART1));*/
+    Sim_CTS(0);
+    //LL_USART_EnableRTSHWFlowCtrl(USART1);
+
+
 }
 
 __STATIC_INLINE void sim7600_delay_ms(int _ms)

@@ -48,7 +48,8 @@ extern bool sim7600_udp_IsOpen;
 SPI_HandleTypeDef hspi2;
 DMA_HandleTypeDef hdma_spi2_tx;
 
-TIM_HandleTypeDef htim5;
+TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim3;
 
 osThreadId defaultTaskHandle;
 osThreadId blinkTaskHandle;
@@ -67,7 +68,8 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_SPI2_Init(void);
-static void MX_TIM5_Init(void);
+static void MX_TIM1_Init(void);
+static void MX_TIM3_Init(void);
 void StartDefaultTask(void const * argument);
 void StartTask02(void const * argument);
 
@@ -119,26 +121,28 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  //MX_USART1_UART_Init();
+  MX_USART1_UART_Init();
   MX_SPI2_Init();
-  //MX_TIM5_Init();
+  MX_TIM1_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   //osMessageGet(queue_id, millisec)
   VS1003_Init();
   VS1003_SoftReset();
-  //HAL_TIM_Base_Start_IT(&htim5);
-  /*HAL_TIM_Base_Start(&htim5);
-  uint32_t t1, t2, t3, t4;
-  t1 = TIM5->CNT;
-  HAL_Delay(1000);
-  t2 = TIM5->CNT;
-  HAL_TIM_Base_Stop(&htim5);
-  TIM5->CNT = 0;
-  HAL_TIM_Base_Start(&htim5);
-  t3 = TIM5->CNT;
-  HAL_Delay(1000);
-  t4 = TIM5->CNT;
-  HAL_Delay(1000);*/
+  HAL_TIM_Base_Start(&htim3);
+  //HAL_TIM_Base_Start_IT(&htim1);
+//  HAL_TIM_Base_Start(&htim1);
+//  uint32_t t1, t2, t3, t4;
+//  t1 = TIM1->CNT;
+//  //HAL_Delay(10);
+//  t2 = TIM5->CNT;
+//  //HAL_TIM_Base_Stop(&htim5);
+//  TIM1->CNT = 0;
+//  //HAL_TIM_Base_Start(&htim5);
+//  t3 = TIM1->CNT;
+//  //HAL_Delay(20);
+//  t4 = TIM1->CNT;
+//  HAL_Delay(1000);
   //VS1003_PlayBeep_DMA();
   /* USER CODE END 2 */
 
@@ -171,7 +175,6 @@ int main(void)
   /* add threads, ... */
   osThreadDef(sim7600Error, sim7600ErrorTask, osPriorityAboveNormal, 0, 128);
   sim7600ErrorHandle = osThreadCreate(osThread(sim7600Error), NULL);
-  //osThreadSuspend(sim7600ErrorHandle);
 
   osMessageQDef(rxUASRTQueue, 20, uint8_t);
   usart_rx_dma_queue_id = osMessageCreate(osMessageQ(rxUASRTQueue), NULL);
@@ -186,6 +189,12 @@ int main(void)
   osMessageQDef(playMp3Queue, 2, uint32_t);
   play_mp3_queue_id = osMessageCreate(osMessageQ(playMp3Queue), NULL);
 
+  //osThreadSuspend(defaultTaskHandle);
+  osThreadSuspend(blinkTaskHandle);
+  osThreadSuspend(sim7600ErrorHandle);
+  osThreadSuspend(usart_rx_dmaHandle);
+  osThreadSuspend(startPlayMp3Handle);
+
 
   /* USER CODE END RTOS_THREADS */
 
@@ -199,6 +208,10 @@ int main(void)
   {
 	 //HAL_Delay(500);
 	 // VS1003_PlayBeep();
+	  /*if(TIM5->CNT >= 1000000) {
+		  TIM5->CNT = 0;
+		  HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+	  }*/
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -290,47 +303,93 @@ static void MX_SPI2_Init(void)
 }
 
 /**
-  * @brief TIM5 Initialization Function
+  * @brief TIM1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM5_Init(void)
+static void MX_TIM1_Init(void)
 {
 
-  /* USER CODE BEGIN TIM5_Init 0 */
+  /* USER CODE BEGIN TIM1_Init 0 */
 
-  /* USER CODE END TIM5_Init 0 */
+  /* USER CODE END TIM1_Init 0 */
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
 
-  /* USER CODE BEGIN TIM5_Init 1 */
+  /* USER CODE BEGIN TIM1_Init 1 */
 
-  /* USER CODE END TIM5_Init 1 */
-  htim5.Instance = TIM5;
-  htim5.Init.Prescaler = 41999;
-  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim5.Init.Period = 4294967295;
-  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 167;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 1500;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
   }
   sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
   {
     Error_Handler();
   }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN TIM5_Init 2 */
+  /* USER CODE BEGIN TIM1_Init 2 */
 
-  /* USER CODE END TIM5_Init 2 */
+  /* USER CODE END TIM1_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 83;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 65535;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
 
 }
 
@@ -475,24 +534,24 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-int numOfDMAInterrupt = 0;
-void DMA2_Stream2_IRQHandler(void) {
-    /* Check half-transfer complete interrupt */
-    if (LL_DMA_IsEnabledIT_HT(DMA2, LL_DMA_STREAM_2) && LL_DMA_IsActiveFlag_HT2(DMA2)) {
-        LL_DMA_ClearFlag_HT2(DMA2);             /* Clear half-transfer complete flag */
-        sim7600_pause_rx_uart_dma(1);
-        osMessagePut(usart_rx_dma_queue_id, 1, 0);
-    }
-
-    /* Check transfer-complete interrupt */
-    if (LL_DMA_IsEnabledIT_TC(DMA2, LL_DMA_STREAM_2) && LL_DMA_IsActiveFlag_TC2(DMA2)) {
-        LL_DMA_ClearFlag_TC2(DMA2);             /* Clear transfer complete flag */
-        sim7600_pause_rx_uart_dma(1);
-        osMessagePut(usart_rx_dma_queue_id, 1, 0);
-    }
-    numOfDMAInterrupt++;
-    /* Implement other events when needed */
-}
+//int numOfDMAInterrupt = 0;
+//void DMA2_Stream2_IRQHandler(void) {
+//    /* Check half-transfer complete interrupt */
+//    if (LL_DMA_IsEnabledIT_HT(DMA2, LL_DMA_STREAM_2) && LL_DMA_IsActiveFlag_HT2(DMA2)) {
+//        LL_DMA_ClearFlag_HT2(DMA2);             /* Clear half-transfer complete flag */
+//        sim7600_pause_rx_uart_dma(1);
+//        osMessagePut(usart_rx_dma_queue_id, 1, 0);
+//    }
+//
+//    /* Check transfer-complete interrupt */
+//    if (LL_DMA_IsEnabledIT_TC(DMA2, LL_DMA_STREAM_2) && LL_DMA_IsActiveFlag_TC2(DMA2)) {
+//        LL_DMA_ClearFlag_TC2(DMA2);             /* Clear transfer complete flag */
+//        sim7600_pause_rx_uart_dma(1);
+//        osMessagePut(usart_rx_dma_queue_id, 1, 0);
+//    }
+//    numOfDMAInterrupt++;
+//    /* Implement other events when needed */
+//}
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
@@ -549,6 +608,8 @@ void startPlayMp3Task(void const * argument)
     playMp3DMA(playMp3QueueEvent.value.v);
   }
 }
+
+int timerUART_DMA_expired = 0;
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -565,6 +626,10 @@ void StartDefaultTask(void const * argument)
   //osThreadSuspend(sim7600ErrorHandle); // suspend all other thread
   //Init_LL_GetTick();
   sim7600_init();
+  osThreadResume(blinkTaskHandle);
+  osThreadResume(sim7600ErrorHandle);
+  osThreadResume(usart_rx_dmaHandle);
+  osThreadResume(startPlayMp3Handle);
   if(!sim7600_config()) sim7600_error = true;
   //osDelay(UINT32_MAX);
   //osDelay(5000);
@@ -623,8 +688,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-  if(htim->Instance == TIM5)
-  		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+  if(htim->Instance == TIM1)
+  {
+	  HAL_TIM_Base_Stop_IT(&htim1);
+	  sim7600_pause_rx_uart_dma();
+	  timerUART_DMA_expired++;
+  }
   /* USER CODE END Callback 1 */
 }
 
